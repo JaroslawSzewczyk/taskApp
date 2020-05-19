@@ -1,43 +1,59 @@
 import React from 'react';
 import io from 'socket.io-client';
+import { v4 as uuidv4 } from 'uuid';
 
 class App extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = {
-      tasks: ['1','2','3'],
-      taskName: ''
+  state = {
+    tasks: [],
+    taskName: '',
+    send: true
+  }
+  
+  componentDidMount() {
+    this.socket = io.connect('http://localhost:8000/');
+    this.socket.on('addTask', (task) => this.addTask(task));
+    this.socket.on('updateData', (tasks) => this.updateTask(tasks));
+    this.socket.on('removeTask', (id) => this.removeTask(id));
+  }
+
+  updateTask(tasks) {
+    this.setState({
+      tasks:  [ ...tasks],
+    });
+  }
+
+  removeTask(id, isLocal) {
+    this.setState({
+      tasks: this.state.tasks.filter((task) => task.id !== id),
+    })
+    if (isLocal) {
+      this.socket.emit('removeTask', (id));
+      isLocal = false;
     }
   }
 
-  componentDidMount() {
-    this.socket = io();
-    this.socket.connect('http://localhost:8000');
-  }
-
-  removeTask(index) {
-    console.log(index)
+  addTask(newTask) {
     this.setState({
-      tasks: this.state.tasks.splice(index, 1),
+      tasks: [...this.state.tasks, newTask],
     })
-    this.socket.emit('removeTask', { index: index });
-    console.log(this.state.tasks);
-  }
-
-  addTask(task) {
-    this.setState({
-      tasks: this.state.tasks.push(task),
-    })
-    console.log(this.state.tasks)
   }
 
   submitForm(event) {
     event.preventDefault();
-    this.addTask(this.state.taskName);
-    this.socket.emit('addTask', { task: this.state.taskName });
+    const newTask = {
+      id: uuidv4(),
+      name: this.state.taskName
+    };
+    this.addTask(newTask);
+    this.socket.emit('addTask', (newTask));
   }
 
   render() {
+
+    const newTask = this.state.tasks.map((task) => (
+      <li key={task.id} class="task">{task.name}<button class="btn btn--red" onClick={(isLocal = true) => this.removeTask(task.id, isLocal)}>Remove</button></li>
+    ));
+    
     return (
       <div className="App">
     
@@ -49,9 +65,7 @@ class App extends React.Component {
           <h2>Tasks</h2>
     
           <ul className="tasks-section__list" id="tasks-list">
-            {this.state.tasks.map(task => (
-              <li key={task} class="task">{task}<button class="btn btn--red" onClick={() => this.removeTask(this.state.tasks.indexOf(task))}>Remove</button></li>
-            ))}
+           {newTask}
           </ul>
           <form id="add-task-form" onSubmit={this.submitForm.bind(this)}>
             <input className="text-input" autocomplete="off" type="text" placeholder="Type your description" id="task-name" value={this.state.taskName} onChange={event => this.setState({taskName: event.target.value})} />
@@ -59,6 +73,7 @@ class App extends React.Component {
           </form>
     
         </section>
+        {console.log(this.state.tasks)}
       </div>
     );
   };
